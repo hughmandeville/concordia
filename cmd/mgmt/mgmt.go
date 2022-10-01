@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	cmd       = "list" // create, export, or list
+	cmd       = "list" // create, delete, export, or list
 	boatsFile = "../../json/boats.json"
 	dbFile    = "../../db/concordia.db"
 )
@@ -58,7 +58,8 @@ func main() {
 
 	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
-		fmt.Println("Problem opening the database (%s): %s", dbFile, err)
+		fmt.Printf("Problem opening the database (%s): %s", dbFile, err)
+		return
 	}
 
 	switch cmd {
@@ -75,6 +76,13 @@ func main() {
 			fmt.Printf("Problem loading boats: %s\n", err)
 			return
 		}
+	case "delete":
+		fmt.Printf("Deleting (%s)...\n", dbFile)
+		err = os.Remove(dbFile)
+		if err != nil {
+			fmt.Printf("Problem deleting DB: %s\n", err)
+			return
+		}
 	case "export":
 		err = export(db)
 		if err != nil {
@@ -88,7 +96,7 @@ func main() {
 			return
 		}
 	default:
-		fmt.Printf("Unexpected command '%s'. Expecting create, export, or list.\n", cmd)
+		fmt.Printf("Unexpected command '%s'. Expecting create, delete, export, or list.\n", cmd)
 		return
 	}
 }
@@ -98,20 +106,20 @@ func create(db *sql.DB) (err error) {
 	// create boat table
 	stmt, err := db.Prepare(`
 	CREATE TABLE IF NOT EXISTS boat (
-	id          INTEGER             PRIMARY KEY,
+	id          INTEGER             PRIMARY KEY  AUTOINCREMENT,
 	boat_num    INTEGER   NOT NULL  UNIQUE,
-	name	    TEXT      NOT NULL,
-	year	    INTEGER   NOT NULL,
-	length      INTEGER   NOT NULL,
-	build_num   TEXT      NOT NULL,
-	boat_url    TEXT      NOT NULL,
-	owner       TEXT      NOT NULL,
-	owner_url   TEXT      NOT NULL,
-	port        TEXT      NOT NULL,
-	latitude    REAL      NOT NULL,
-	longitude   REAL      NOT NULL,
-	created     INTEGER   NOT NULL,
-	modified    INTEGER   NOT NULL`)
+	name	    TEXT      NOT NULL  DEFAULT '',
+	year	    INTEGER   NOT NULL  DEFAULT 0,
+	length      INTEGER   NOT NULL  DEFAULT 0,
+	build_num   TEXT      NOT NULL  DEFAULT '',
+	boat_url    TEXT      NOT NULL  DEFAULT '',
+	owner       TEXT      NOT NULL  DEFAULT '',
+	owner_url   TEXT      NOT NULL  DEFAULT '',
+	port        TEXT      NOT NULL  DEFAULT '',
+	latitude    REAL      NOT NULL  DEFAULT 0,
+	longitude   REAL      NOT NULL  DEFAULT 0,
+	created     INTEGER   NOT NULL  DEFAULT 0,
+	modified    INTEGER   NOT NULL  DEFAULT 0)`)
 	if err != nil {
 		return
 	}
@@ -156,11 +164,10 @@ func insertBoat(db *sql.DB, b Boat) (err error) {
 		boat_num,
 		name)
 	VALUES (?, ?, ?)`
-	statement, err := db.Prepare(q)
+	stmt, err := db.Prepare(q)
 	if err != nil {
 		return
 	}
-	_, err = statement.Exec(b.ID, b.BoatNumber, b.Name)
+	_, err = stmt.Exec(b.ID, b.BoatNumber, b.Name)
 	return
-
 }
