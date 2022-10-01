@@ -1,0 +1,18 @@
+[
+    {
+        "id": 1,
+        "boat_num": 1,
+        "name": "Java",
+        "year": 1938,
+        "length": 39,
+        "build_num": "Casey",
+        "boat_url": "",
+        "owner": "Josef Schengili",
+        "owner_url": "",
+        "port": "Monaco",
+        "latitude": 43.73841760000001,
+        "longitude": 7.42461579999997,
+        "created": "2018-09-16 18:42:21",
+        "modified": "2018-09-16 18:42:21"
+    }
+]
