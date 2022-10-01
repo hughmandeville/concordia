@@ -4,33 +4,15 @@ This repo has files used to create [concordiaboats.com](https://www.concordiaboa
 
 ## Files & Directories
 
-```sh
-  Makefile              - Makefile with targets for running site locally and installing.
-  README.md             - this file.
-  cmd/                  - Go programs.
+```text
+  README.md            - this file
+  cmd/                 - Go commands
+  client/
+    code_v2.js         - main JS code file
+    index.html         - home page
+    style_v2.css       - main style sheet
 ```
 
-## Database (PostgreSQL)
+## Database (SQLite)
 
-```sh
-
-apt-
-apt-get install emacs
-
-docker volume create concordia
-
-docker run -v concordia:/opt/concordia --name 14.1-alpine -e POSTGRES_PASSWORD=dbpw -d postgres
---mount type=bind,source=$(shell pwd)/src/var/nyt/www/api/internal,target=/nyt/php/www-internal \
-
-docker exec -it 14.1-alpine /bin/sh
-
-psql -U postgres
-```
-
-https://pkg.go.dev/github.com/mattn/go-sqlite3
-https://sqlitebrowser.org/
-
-Boat images
-Boat info
-Boat links
-Boat owner info
+- <https://sqlitebrowser.org/>
