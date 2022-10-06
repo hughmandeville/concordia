@@ -1,32 +1,29 @@
 //
-// Command to use to manage the Concordia SQLite database.
+// Command to use to manage the Concordia MariaDB database.
 // Actions
-//   create - create the database.
 //   export - export the database to a JSON file.
 //   list   - list contents of the database
 //
 // Tables
-//   boat   - current boat information.
-//   image  - boat images.
-//   link   - boat links.
-//   owner  - boat owner history.
+//   yawl                 - current boat information.
+//   yawl_image          - boat images.
+//   yawl_link           - boat links.
+//   yawl_owner_history  - boat owner history.
 
 package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var (
-	cmd       = "list" // create, delete, export, or list
-	boatsFile = "../../json/boats.json"
-	dbFile    = "../../db/concordia.db"
+	cmd = "list" // export, or list
+
 )
 
 // store current boat information
@@ -44,45 +41,20 @@ type Boat struct {
 	Latitude    float64   `json:"latitude"`
 	Longitude   float64   `json:"longitude"`
 	Created     time.Time `json:"created"`
-	Modified    time.Time `json:"modified"`
 }
 
 func main() {
-
 	if len(os.Args) >= 2 {
 		cmd = os.Args[1]
 	}
 
-	fmt.Printf("Concordia Database\n")
-	fmt.Printf("------------------\n")
-
-	db, err := sql.Open("sqlite3", dbFile)
+	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:3306)/concordia")
 	if err != nil {
-		fmt.Printf("Problem opening the database (%s): %s", dbFile, err)
-		return
+		fmt.Printf("Problem connecting to the database: %s\n", err)
 	}
+	defer db.Close()
 
 	switch cmd {
-	case "create":
-		fmt.Printf("Creating (%s)...\n", dbFile)
-		err = create(db)
-		if err != nil {
-			fmt.Printf("Problem creating DB: %s\n", err)
-			return
-		}
-		err = loadBoats(db)
-		fmt.Printf("Loading boats...\n")
-		if err != nil {
-			fmt.Printf("Problem loading boats: %s\n", err)
-			return
-		}
-	case "delete":
-		fmt.Printf("Deleting (%s)...\n", dbFile)
-		err = os.Remove(dbFile)
-		if err != nil {
-			fmt.Printf("Problem deleting DB: %s\n", err)
-			return
-		}
 	case "export":
 		err = export(db)
 		if err != nil {
@@ -96,35 +68,9 @@ func main() {
 			return
 		}
 	default:
-		fmt.Printf("Unexpected command '%s'. Expecting create, delete, export, or list.\n", cmd)
+		fmt.Printf("Unexpected command '%s'. Expecting export or list.\n", cmd)
 		return
 	}
-}
-
-// boat, image, link, owner
-func create(db *sql.DB) (err error) {
-	// create boat table
-	stmt, err := db.Prepare(`
-	CREATE TABLE IF NOT EXISTS boat (
-	id          INTEGER             PRIMARY KEY  AUTOINCREMENT,
-	boat_num    INTEGER   NOT NULL  UNIQUE,
-	name	    TEXT      NOT NULL  DEFAULT '',
-	year	    INTEGER   NOT NULL  DEFAULT 0,
-	length      INTEGER   NOT NULL  DEFAULT 0,
-	build_num   TEXT      NOT NULL  DEFAULT '',
-	boat_url    TEXT      NOT NULL  DEFAULT '',
-	owner       TEXT      NOT NULL  DEFAULT '',
-	owner_url   TEXT      NOT NULL  DEFAULT '',
-	port        TEXT      NOT NULL  DEFAULT '',
-	latitude    REAL      NOT NULL  DEFAULT 0,
-	longitude   REAL      NOT NULL  DEFAULT 0,
-	created     INTEGER   NOT NULL  DEFAULT 0,
-	modified    INTEGER   NOT NULL  DEFAULT 0)`)
-	if err != nil {
-		return
-	}
-	_, err = stmt.Exec()
-	return
 }
 
 func export(db *sql.DB) (err error) {
@@ -132,42 +78,38 @@ func export(db *sql.DB) (err error) {
 }
 
 func list(db *sql.DB) (err error) {
-	return
-}
-
-// Read boats data from JSON file and insert into DB.
-func loadBoats(db *sql.DB) (err error) {
-	data, err := os.ReadFile(boatsFile)
+	results, err := db.Query(`
+	SELECT boat_num, SUM(num_images) AS num_images, SUM(num_links) AS num_links, SUM(num_owners) AS num_owners
+	FROM (
+	SELECT y.boat_num, count(yi.id) AS num_images, 0 AS num_links, 0 AS num_owners
+	FROM yawl y
+	LEFT JOIN yawl_image yi ON y.boat_num = yi.boat_num
+	GROUP BY y.boat_num
+	UNION
+	SELECT y.boat_num, 0 AS num_images, count(yl.id) AS num_links, 0 AS num_owners
+	FROM yawl y
+	LEFT JOIN yawl_link yl ON y.boat_num = yl.boat_num
+	GROUP BY y.boat_num
+	UNION
+	SELECT y.boat_num, 0 AS num_images, 0 AS num_links, count(yoh.id) AS num_owners
+	FROM yawl y
+	LEFT JOIN yawl_owner_history yoh ON y.boat_num = yoh.boat_num
+	GROUP BY y.boat_num
+	) AS b GROUP BY boat_num
+	`)
 	if err != nil {
 		return
 	}
-	var boats []Boat
-	err = json.Unmarshal(data, &boats)
-	if err != nil {
-		return
-	}
+	fmt.Printf("  | Boat | Images | Links | Owners |\n")
+	fmt.Printf("  | ---- | ------ | ----- | ------ |\n")
+	for results.Next() {
+		var boat_num, num_images, num_links, num_owners uint32
 
-	for _, b := range boats {
-		err = insertBoat(db, b)
+		err = results.Scan(&boat_num, &num_images, &num_links, &num_owners)
 		if err != nil {
 			return
 		}
+		fmt.Printf("  |  %3d |    %3d |   %3d |    %3d |\n", boat_num, num_images, num_links, num_owners)
 	}
-	return
-}
-
-// We are passing db reference connection from main to our method with other parameters
-func insertBoat(db *sql.DB, b Boat) (err error) {
-	q := `
-	INSERT INTO boat (
-		id,
-		boat_num,
-		name)
-	VALUES (?, ?, ?)`
-	stmt, err := db.Prepare(q)
-	if err != nil {
-		return
-	}
-	_, err = stmt.Exec(b.ID, b.BoatNumber, b.Name)
 	return
 }
